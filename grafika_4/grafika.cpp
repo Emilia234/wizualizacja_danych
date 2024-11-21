@@ -9,17 +9,19 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-
 const GLchar* vertexSource = R"glsl(
 #version 150 core
 in vec3 position;
+in vec3 color;
 in vec2 texCoord;
 out vec2 TexCoord;
+out vec3 Color;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 proj;
 
 void main() {
+    Color = color;
     TexCoord = texCoord;
     gl_Position = proj * view * model * vec4(position, 1.0);
 }
@@ -27,11 +29,12 @@ void main() {
 
 const GLchar* fragmentSource = R"glsl(
 #version 150 core
+in vec3 Color;
 in vec2 TexCoord;
 out vec4 outColor;
 uniform sampler2D texture1;
 void main() {
-    outColor = texture(texture1, TexCoord);
+   outColor = texture(texture1, TexCoord);
 }
 )glsl";
 
@@ -51,9 +54,50 @@ void checkShaderCompilation(GLuint shader, const std::string& shaderType) {
     }
 }
 
+void ustawKameraMysz(sf::Window& window, double xpos, double ypos, float& yaw, float& pitch, glm::vec3& cameraFront, float sensitivity, bool& firstMouse, float& lastX, float& lastY) {
+    if (firstMouse) {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    double xoffset = xpos - lastX;
+    double yoffset = lastY - ypos;
+    lastX = xpos;
+    lastY = ypos;
+
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch -= yoffset;
+
+    if (pitch > 89.0f) pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+}
+
+void ustawKameraKlawisze(glm::vec3& cameraPos, glm::vec3& cameraFront, glm::vec3& cameraUp, float cameraSpeed) {
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+        cameraPos += cameraSpeed * cameraFront;
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+        cameraPos -= cameraSpeed * cameraFront;
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+}
+
 int main() {
-    sf::Window window(sf::VideoMode(800, 600), "Oteksturowany sześcian", sf::Style::Close);
-    window.setFramerateLimit(60);
+    sf::Window window(sf::VideoMode(800, 600), "OpenGL FPS Camera", sf::Style::Close);
+    window.setFramerateLimit(20);
+    window.setMouseCursorGrabbed(true);
+    window.setMouseCursorVisible(false);
 
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
@@ -65,47 +109,47 @@ int main() {
     glEnable(GL_DEPTH_TEST);
 
     GLfloat vertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
+         0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 1.0f, 0.0f,  
+         0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+         0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 
+        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  
+        -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 
 
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 
-        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
+        -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f,  
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 1.0f, 1.0f, 0.0f,  
+         0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+         0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+         0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f,  
+        -0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 0.0f, 0.0f,  
 
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f,  
+        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 1.0f, 0.0f,  
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+        -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
+        -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f,  
 
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 1.0f, 0.0f,  
+         0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 1.0f, 1.0f,  
+         0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+         0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f,  
+         0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 0.0f,  
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 1.0f, 0.0f,  
 
-         -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 
-          0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 
-          0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 
-          0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
-         -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 
+         -0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  
+          0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 1.0f, 0.0f,  
+          0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f,  
+          0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f,  
+         -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 1.0f,  
+         -0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 0.0f, 0.0f,  
 
-         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 
-          0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
-          0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-          0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 
-         -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 0.0f,  
+          0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 0.0f,  
+          0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f,  
+          0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f,  
+         -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f,  
+         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 1.0f, 0.0f   
     };
 
     GLuint vbo, vao;
@@ -116,10 +160,12 @@ int main() {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8* sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8* sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)(5 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(2);
 
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexSource, NULL);
@@ -134,6 +180,7 @@ int main() {
     GLuint shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
+    glBindFragDataLocation(shaderProgram, 0, "outColor");
     glLinkProgram(shaderProgram);
     glUseProgram(shaderProgram);
 
@@ -166,16 +213,49 @@ int main() {
     }
     stbi_image_free(data);
 
+    GLuint textureLocation = glGetUniformLocation(shaderProgram, "texture1");
+    glUniform1i(textureLocation, 0);
+
     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
     glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    while (window.isOpen()) {
+    float yaw = -90.0f;
+    float pitch = 0.0f;
+    float sensitivity = 0.1f;
+    bool firstMouse = true;
+    float lastX = 400, lastY = 300;
+
+    sf::Clock clock;
+    sf::Time time;
+
+    bool running = true;
+    while (running && window.isOpen()) {
+        time = clock.getElapsedTime();
+        float deltaTime = time.asSeconds();
+
+        clock.restart();
+
+        float cameraSpeed = 2.5f * deltaTime;
+
         sf::Event event;
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed)
                 window.close();
+
+            if (event.type == sf::Event::MouseMoved) {
+                sf::Vector2i localPosition = sf::Mouse::getPosition(window);
+                ustawKameraMysz(window, localPosition.x, localPosition.y, yaw, pitch, cameraFront, sensitivity, firstMouse, lastX, lastY);
+            }
+
+            if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Escape)
+                    running = false;
+            }
         }
+
+        ustawKameraKlawisze(cameraPos, cameraFront, cameraUp, cameraSpeed);
+
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
 
@@ -183,10 +263,13 @@ int main() {
         glUniformMatrix4fv(uniModel, 1, GL_FALSE, glm::value_ptr(model));
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
         glBindVertexArray(vao);
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
+        std::string fps = "FPS: " + std::to_string(1.0f / deltaTime) + " | Czas trwania klatki: " + std::to_string(deltaTime) + "s";
+        window.setTitle(fps);
         window.display();
     }
 
